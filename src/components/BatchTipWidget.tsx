@@ -3,17 +3,31 @@
 // ============================================================
 // StarkSend – Batch Tipping (Multi-Recipient, Single TX)
 // ============================================================
-// Uses Starkzap's batch transfer API:
-//   wallet.transfer(token, [ {to, amount}, {to, amount}, ... ])
-// All recipients are paid in a single on-chain transaction.
+// Uses starknet.js account.execute() multicall to pay all
+// recipients in a single on-chain transaction.
 //
 // Beaver logging: [StarkSend:Batch]
 // ============================================================
 
-import React, { useState } from "react";
-import { Amount, fromAddress, getPresets } from "starkzap";
+import { useState } from "react";
+import { cairo, CallData } from "starknet";
 import { useStarkSendSession } from "@/components/StarkSendSessionProvider";
 import { getTokenMeta, SUPPORTED_TOKENS } from "@/lib/tokens";
+
+// ── Token config ──────────────────────────────────────────────
+
+const TOKEN_CONFIG: Record<string, { address: string; decimals: number }> = {
+  STRK: { address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", decimals: 18 },
+  ETH:  { address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", decimals: 18 },
+  USDC: { address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8", decimals: 6  },
+};
+
+function parseAmount(amount: string, decimals: number): bigint {
+  const parts = amount.split(".");
+  const whole = parts[0] || "0";
+  const fraction = (parts[1] || "").padEnd(decimals, "0").slice(0, decimals);
+  return BigInt(whole + fraction);
+}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -87,7 +101,6 @@ export function BatchTipWidget() {
       setError(null);
       setExplorerUrl(null);
 
-      // Validate all rows
       const valid = recipients.filter((r) => r.address && r.amount);
       if (valid.length === 0) {
         throw new Error("Add at least one recipient with an address and amount.");
@@ -102,27 +115,31 @@ export function BatchTipWidget() {
         }
       }
 
-      const wallet = session.wallet;
-      const presets = getPresets(wallet.getChainId());
-      const token = presets[selectedToken];
-      if (!token) throw new Error(`Token ${selectedToken} not found.`);
+      const tokenConfig = TOKEN_CONFIG[selectedToken];
+      if (!tokenConfig) throw new Error(`Token ${selectedToken} not supported.`);
 
-      const transfers = valid.map((r) => ({
-        to: fromAddress(r.address),
-        amount: Amount.parse(r.amount, token),
+      const calls = valid.map((r) => ({
+        contractAddress: tokenConfig.address,
+        entrypoint: "transfer",
+        calldata: CallData.compile({
+          recipient: r.address,
+          amount: cairo.uint256(parseAmount(r.amount, tokenConfig.decimals)),
+        }),
       }));
 
       log("🚀 Batch send", { recipients: valid.length, token: selectedToken });
 
-      const tx = await wallet.transfer(token, transfers);
+      const account = session.wallet;
+      const result = await account.execute(calls);
 
-      log("⏳ Batch submitted", { explorerUrl: tx.explorerUrl });
+      log("⏳ Batch submitted", { txHash: result.transaction_hash });
       setStatus("confirming");
 
-      await tx.wait();
+      await account.waitForTransaction(result.transaction_hash);
 
-      log("🎉 Batch confirmed!", { explorerUrl: tx.explorerUrl });
-      setExplorerUrl(tx.explorerUrl ?? null);
+      const url = `https://starkscan.co/tx/${result.transaction_hash}`;
+      log("🎉 Batch confirmed!", { explorerUrl: url });
+      setExplorerUrl(url);
       setStatus("success");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Batch send failed";
@@ -146,9 +163,7 @@ export function BatchTipWidget() {
       <div className="space-y-4">
         <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-center space-y-3">
           <div className="text-3xl">🎉</div>
-          <p className="text-sm font-semibold text-emerald-300">
-            Batch tip sent!
-          </p>
+          <p className="text-sm font-semibold text-emerald-300">Batch tip sent!</p>
           {explorerUrl && (
             <a
               href={explorerUrl}
@@ -231,7 +246,7 @@ export function BatchTipWidget() {
         ))}
       </div>
 
-      {/* Add recipient button */}
+      {/* Add recipient */}
       <button
         onClick={addRecipient}
         disabled={isBusy}

@@ -7,8 +7,9 @@
 // custom input, onTipSuccess callback.
 // ============================================================
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTip } from "@/hooks/useTip";
+import { useBalance } from "@/hooks/useBalance";
 import { SUPPORTED_TOKENS, getTokenMeta } from "@/lib/tokens";
 
 // ── Preset tip amounts per token ─────────────────────────────
@@ -43,11 +44,18 @@ export function TipWidget({
   onTipSuccess,
 }: TipWidgetProps) {
   const { status, error, result, sendTip, reset } = useTip();
+  const { balances } = useBalance();
 
   const [recipient, setRecipient] = useState(defaultRecipient);
   const [selectedToken, setSelectedToken] = useState("STRK");
   const [amount, setAmount] = useState("");
   const [customAmount, setCustomAmount] = useState(false);
+
+  const tokenBalance = balances.find((b) => b.symbol === selectedToken);
+  const balanceNum = tokenBalance ? parseFloat(tokenBalance.formatted) : null;
+  const amountNum = parseFloat(amount);
+  const isInsufficientBalance =
+    balanceNum !== null && !isNaN(amountNum) && amountNum > balanceNum;
 
   const pendingRef = useRef<{ recipient: string; amount: string; token: string } | null>(null);
   const firedRef = useRef(false);
@@ -190,8 +198,13 @@ export function TipWidget({
 
       {/* Amount selection */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-neutral-500 uppercase tracking-wider">
-          Amount ({selectedToken})
+        <label className="text-xs font-medium text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+          <span>Amount ({selectedToken})</span>
+          {tokenBalance && (
+            <span className="normal-case font-normal text-neutral-500">
+              Balance: {tokenBalance.formatted} {selectedToken}
+            </span>
+          )}
         </label>
 
         <div className="grid grid-cols-5 gap-1.5">
@@ -260,10 +273,14 @@ export function TipWidget({
       {/* Send button */}
       <button
         onClick={handleSend}
-        disabled={!recipient || !amount || isBusy}
+        disabled={!recipient || !amount || isBusy || isInsufficientBalance}
         className={`w-full py-3 rounded-xl font-semibold text-sm ${tokenMeta.bgColor} hover:opacity-90 text-neutral-950 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer`}
       >
-        {isBusy ? "Sending…" : `Tip ${amount || "—"} ${selectedToken}`}
+        {isBusy
+          ? "Sending…"
+          : isInsufficientBalance
+          ? "Insufficient balance"
+          : `Tip ${amount || "—"} ${selectedToken}`}
       </button>
 
       <p className="text-center text-[10px] text-neutral-600">

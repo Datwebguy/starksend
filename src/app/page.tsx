@@ -7,7 +7,7 @@
 // "Create Your Tip Link" links to /app (auto-connects).
 // ============================================================
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
 // ── Token data for carousel ──────────────────────────────────
@@ -120,6 +120,16 @@ export default function LandingPage() {
   useScrollReveal();
   useNavScroll();
 
+  const [selectedAmount, setSelectedAmount] = useState(5);
+  const [strkPrice, setStrkPrice] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("https://api.coingecko.com/api/v3/simple/price?ids=starknet&vs_currencies=usd")
+      .then((r) => r.json())
+      .then((data) => setStrkPrice(data?.starknet?.usd ?? null))
+      .catch(() => setStrkPrice(null));
+  }, []);
+
   return (
     <>
       {/* ═══════ NAV ═══════ */}
@@ -187,7 +197,7 @@ export default function LandingPage() {
 
           {/* Right: card mockup */}
           <div className="fade-up stagger-2 relative z-10 lg:order-last order-first">
-            <div className="hero-card-3d bg-[var(--bg3)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] p-7">
+            <div className="hero-card-3d bg-[var(--bg3)] border border-[rgba(255,255,255,0.08)] rounded-[var(--radius-xl)] p-7 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_8px_40px_rgba(245,158,11,0.18)]">
               <div className="flex items-center justify-between mb-5">
                 <div className="text-base font-bold">
                   Stark<span className="text-[var(--amber)]">Send</span>
@@ -201,17 +211,22 @@ export default function LandingPage() {
               </div>
               <div className="text-center py-6 border-t border-b border-[rgba(255,255,255,0.06)] mb-5">
                 <div className="text-5xl font-bold tracking-tight">
-                  5{" "}
+                  {selectedAmount}{" "}
                   <span className="text-[28px] text-[var(--text2)]">STRK</span>
                 </div>
-                <div className="text-sm text-[var(--text2)] mt-1">≈ $0.42</div>
+                <div className="text-sm text-[var(--text2)] mt-1">
+                  {strkPrice !== null
+                    ? `≈ $${(selectedAmount * strkPrice).toFixed(2)}`
+                    : "≈ $--"}
+                </div>
               </div>
               <div className="grid grid-cols-4 gap-2 mb-4">
-                {["1", "5", "10", "25"].map((n) => (
+                {[1, 5, 10, 25].map((n) => (
                   <button
                     key={n}
-                    className={`py-2.5 rounded-[10px] text-sm font-semibold transition-all ${
-                      n === "5"
+                    onClick={() => setSelectedAmount(n)}
+                    className={`py-2.5 rounded-[10px] text-sm font-semibold transition-all cursor-pointer ${
+                      n === selectedAmount
                         ? "bg-[var(--amber)] text-black border border-[var(--amber)]"
                         : "bg-[var(--bg4)] text-[var(--text2)] border border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,255,255,0.15)] hover:text-white"
                     }`}
@@ -220,8 +235,8 @@ export default function LandingPage() {
                   </button>
                 ))}
               </div>
-              <button className="w-full py-3.5 rounded-xl text-base font-semibold bg-[var(--amber)] text-black hover:bg-[#fbbf24] transition-all">
-                Tip 5 STRK ⚡
+              <button className="w-full py-3.5 rounded-xl text-base font-semibold bg-[var(--amber)] text-black hover:bg-[#fbbf24] transition-all cursor-pointer">
+                Tip {selectedAmount} STRK ⚡
               </button>
               <p className="text-center text-[11px] text-[var(--text3)] mt-3">
                 Gasless · No wallet popups · Instant

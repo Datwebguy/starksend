@@ -494,7 +494,7 @@ export default function LandingPage() {
           <div className="flex gap-6">
             <a href="https://docs.starknet.io/build/starkzap/overview" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[var(--text3)] hover:text-white transition-colors">Docs</a>
 <a href="https://github.com/Datwebguy/starksend" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[var(--text3)] hover:text-white transition-colors">GitHub</a>
-<a href="https://x.com/Datwebguy" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[var(--text3)] hover:text-white transition-colors">Twitter</a>
+<a href="https://x.com/Datweb3guy" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[var(--text3)] hover:text-white transition-colors">Twitter</a>
           </div>
           <div className="text-xs text-[var(--text3)]">
             Built on Starknet by Datwebguy

@@ -5,16 +5,15 @@
 // ============================================================
 // Encapsulates the full tip lifecycle:
 //   1. Validate recipient address + amount
-//   2. Check sender balance
-//   3. Execute gasless transfer via Starkzap
-//   4. Wait for on-chain confirmation
+//   2. Execute gasless ERC20 transfer via starknet.js
+//   3. Wait for on-chain confirmation
 //
-// All Starkzap API calls follow the official ERC20 docs:
-//   https://docs.starknet.io/build/starkzap/erc20
+// Uses starknet.js Contract directly with the Cartridge
+// WalletAccount — no Starkzap SDK wrapper needed.
 // ============================================================
 
 import { useCallback, useState } from "react";
-import { Amount, fromAddress, getPresets } from "starkzap";
+import { Contract, cairo } from "starknet";
 import { useStarkSendSession } from "@/components/StarkSendSessionProvider";
 
 // ── Types ────────────────────────────────────────────────────
@@ -56,12 +55,56 @@ function log(stage: string, payload?: unknown) {
   }
 }
 
+// ── Token config ──────────────────────────────────────────────
+
+const TOKEN_CONFIG: Record<string, { address: string; decimals: number }> = {
+  STRK: {
+    address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+    decimals: 18,
+  },
+  ETH: {
+    address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+    decimals: 18,
+  },
+  USDC: {
+    address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+    decimals: 6,
+  },
+};
+
+// Minimal ERC20 ABI — only the transfer function we need.
+const ERC20_ABI = [
+  {
+    name: "transfer",
+    type: "function",
+    inputs: [
+      {
+        name: "recipient",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      { name: "amount", type: "core::integer::u256" },
+    ],
+    outputs: [],
+    state_mutability: "external",
+  },
+];
+
 // ── Address validation ───────────────────────────────────────
 
 const STARK_ADDRESS_RE = /^0x[0-9a-fA-F]{1,64}$/;
 
 function isValidStarknetAddress(addr: string): boolean {
   return STARK_ADDRESS_RE.test(addr);
+}
+
+// ── Amount conversion ────────────────────────────────────────
+
+function toWei(humanAmount: string, decimals: number): bigint {
+  // Parse as a float then convert to integer wei using BigInt.
+  // E.g. "5" with 18 decimals → 5000000000000000000n
+  const [intPart, fracPart = ""] = humanAmount.split(".");
+  const paddedFrac = fracPart.slice(0, decimals).padEnd(decimals, "0");
+  return BigInt(intPart) * BigInt(10 ** decimals) + BigInt(paddedFrac);
 }
 
 // ── Hook ─────────────────────────────────────────────────────
@@ -105,56 +148,51 @@ export function useTip(): UseTipReturn {
           throw new Error("Tip amount must be a positive number.");
         }
 
-        // ── Step 2: Resolve token + check balance ──────────
-        const wallet = session.wallet;
-        const presets = getPresets(wallet.getChainId());
-        const token = presets[tokenSymbol];
-
-        if (!token) {
+        // ── Step 2: Resolve token ──────────────────────────
+        const tokenConfig = TOKEN_CONFIG[tokenSymbol.toUpperCase()];
+        if (!tokenConfig) {
           throw new Error(
-            `Token "${tokenSymbol}" not found in presets for this network.`
+            `Token "${tokenSymbol}" is not supported. Use STRK, ETH, or USDC.`
           );
         }
 
-        log("💰 Checking balance", { token: token.symbol });
-        const balance = await wallet.balanceOf(token);
-        const tipAmount = Amount.parse(amount, token);
-
-        log("📊 Balance check", {
-          balance: balance.toFormatted(true),
-          tipAmount: tipAmount.toFormatted(true),
+        log("🪙 Token resolved", {
+          symbol: tokenSymbol,
+          address: tokenConfig.address,
+          decimals: tokenConfig.decimals,
         });
 
-        if (balance.lt(tipAmount)) {
-          throw new Error(
-            `Insufficient balance. You have ${balance.toFormatted(true)} ` +
-              `but tried to tip ${tipAmount.toFormatted(true)}.`
-          );
-        }
+        // ── Step 3: Convert amount to wei ──────────────────
+        const amountWei = toWei(amount, tokenConfig.decimals);
 
-        // ── Step 3: Execute transfer ───────────────────────
+        log("🔢 Amount converted to wei", {
+          human: amount,
+          wei: amountWei.toString(),
+        });
+
+        // ── Step 4: Execute ERC20 transfer ─────────────────
         log("🚀 Sending tip transaction…");
         setStatus("sending");
 
-        const tx = await wallet.transfer(token, [
-          {
-            to: fromAddress(recipientAddress),
-            amount: tipAmount,
-          },
-        ]);
+        const account = session.wallet; // Cartridge WalletAccount
+        const contract = new Contract(ERC20_ABI, tokenConfig.address, account);
 
-        log("⏳ Tx submitted, waiting for confirmation", {
-          explorerUrl: tx.explorerUrl,
-        });
+        const tx = await contract.transfer(
+          recipientAddress,
+          cairo.uint256(amountWei)
+        );
+
+        const txHash: string = tx.transaction_hash;
+
+        log("⏳ Tx submitted, waiting for confirmation", { txHash });
         setStatus("confirming");
 
-        await tx.wait();
+        await account.waitForTransaction(txHash);
 
-        // ── Step 4: Done ───────────────────────────────────
-        const tipResult: TipResult = {
-          txHash: tx.explorerUrl?.split("/tx/")[1] ?? "unknown",
-          explorerUrl: tx.explorerUrl ?? "",
-        };
+        // ── Step 5: Done ───────────────────────────────────
+        const explorerUrl = `https://starkscan.co/tx/${txHash}`;
+
+        const tipResult: TipResult = { txHash, explorerUrl };
 
         log("🎉 Tip confirmed!", tipResult);
         setResult(tipResult);

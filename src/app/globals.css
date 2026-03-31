@@ -1,0 +1,117 @@
+/* src/app/globals.css */
+/* ============================================================ */
+/* StarkSend – Global Styles & Design System                     */
+/* ============================================================ */
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  --bg: #09090b;
+  --bg2: #111113;
+  --bg3: #18181b;
+  --bg4: #1e1e22;
+  --text: #fafafa;
+  --text2: #a1a1aa;
+  --text3: #52525b;
+  --amber: #f59e0b;
+  --amber-dark: #92400e;
+  --amber-glow: rgba(245, 158, 11, 0.15);
+  --emerald: #34d399;
+  --blue: #60a5fa;
+  --coral: #f97316;
+  --radius: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --font: "Outfit", system-ui, sans-serif;
+  --mono: "JetBrains Mono", monospace;
+}
+
+/* ── Scroll reveal animations ── */
+.fade-up {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.stagger-1 { transition-delay: 0.1s; }
+.stagger-2 { transition-delay: 0.2s; }
+.stagger-3 { transition-delay: 0.3s; }
+.stagger-4 { transition-delay: 0.4s; }
+
+/* ── Nav scroll state ── */
+nav#main-nav.scrolled {
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Token carousel ── */
+@keyframes scrollTokens {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.token-scroll-anim {
+  animation: scrollTokens 30s linear infinite;
+}
+
+/* ── Hero card 3D tilt ── */
+.hero-card-3d {
+  transform: perspective(800px) rotateY(-4deg) rotateX(2deg);
+  transition: transform 0.6s ease;
+}
+.hero-card-3d:hover {
+  transform: perspective(800px) rotateY(0deg) rotateX(0deg);
+}
+
+/* ── Why-cards hover effect ── */
+.why-card-hover {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.why-card-hover::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--amber);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.why-card-hover:hover {
+  border-color: rgba(245, 158, 11, 0.2) !important;
+  transform: translateY(-4px);
+}
+.why-card-hover:hover::before { opacity: 1; }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg4);
+  border-radius: 3px;
+}
